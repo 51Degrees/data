@@ -1,0 +1,8 @@
+# Downloaded by get-data-files.ps1 and get-data-files.sh
+device-detection-data/51Degrees-LiteV4.1.hash
+device-detection-data/20000 User Agents.csv
+device-detection-data/20000 Evidence Records.yml
+ip-intelligence-data/*.ipi
+ip-intelligence-data/*.ipi.gz
+# Results of the download script tests
+ip-intelligence-data/test-results/
