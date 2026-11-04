@@ -1,0 +1,4 @@
+# The shell script and the links keep LF line endings on every system, so
+# the script runs and each link reads the same everywhere.
+*.sh text eol=lf
+*.link text eol=lf
