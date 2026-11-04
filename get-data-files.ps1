@@ -11,7 +11,7 @@ kept, unless -Update or -Force is given.
 
 .PARAMETER Name
 The files to download, by file or folder name, for example
-51Degrees-LiteV4.1.hash or ip-intelligence-data. Every linked file when
+51Degrees-LiteV4.1.hash or ip-intelligence. Every linked file when
 none is given.
 
 .PARAMETER Update

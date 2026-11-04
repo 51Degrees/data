@@ -10,7 +10,7 @@
 # there is kept, unless -u or -f is given.
 #
 #   name  the files to download, by file or folder name, for example
-#         51Degrees-LiteV4.1.hash or ip-intelligence-data. Every linked
+#         51Degrees-LiteV4.1.hash or ip-intelligence. Every linked
 #         file when none is given.
 #   -u    asks again for each file that is already there, and replaces it
 #         only when a newer one is available
