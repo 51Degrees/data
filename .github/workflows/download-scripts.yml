@@ -72,6 +72,24 @@ jobs:
           sh ./get-data-files.sh -u 51Degrees-IPIV4AsnIpiV41.ipi | grep 'up to date'
           sh ./get-data-files.sh device-detection | grep 'already there'
 
+      - name: The old IP Intelligence scripts get the same file
+        shell: pwsh
+        run: |
+          $asn = 'ip-intelligence/51Degrees-IPIV4AsnIpiV41.ipi'
+          $want = (Get-Content "$env:RUNNER_TEMP/hashes.txt")[0]
+          ./ip-intelligence/get-lite-file-from-azure.ps1 -Asn -Force
+          if ($LASTEXITCODE) { exit 1 }
+          if ((Get-FileHash -LiteralPath $asn).Hash -ne $want) {
+            throw 'get-lite-file-from-azure.ps1 saved a different Asn file'
+          }
+          if (-not $IsWindows) {
+            sh ./ip-intelligence/get-lite-file-from-azure.sh -asn -f
+            if ($LASTEXITCODE) { exit 1 }
+            if ((Get-FileHash -LiteralPath $asn).Hash -ne $want) {
+              throw 'get-lite-file-from-azure.sh saved a different Asn file'
+            }
+          }
+
       - name: Check the files
         shell: pwsh
         run: |

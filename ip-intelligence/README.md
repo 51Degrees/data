@@ -11,10 +11,7 @@ get it.
 ## Download scripts in this folder
 
 `get-lite-file-from-azure.ps1` and `get-lite-file-from-azure.sh` are kept
-so that existing scripts that call them keep working. They download the
-same files as the root scripts.
-
-## Tests
-
-`ci/run-unit-tests.ps1` runs the Pester tests in `tests/`. Each test
-downloads a file into a temporary folder and checks that it unpacks.
+so that existing scripts that call them keep working, with the same
+options. They no longer use Azure storage. Each one runs the root script
+for the Lite file, the Asn file or both, which downloads them from the
+Distributor into this folder.
