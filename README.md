@@ -1,9 +1,14 @@
-# ![51Degrees](https://51degrees.com/img/logo.png?utm_source=github&utm_medium=readme&utm_campaign=data&utm_content=readme&utm_term=top "Data rewards the curious") **Data files**
+# 51Degrees Device Detection and IP Intelligence data files
 
-The free data files and test evidence for 51Degrees
+<img src=".github/images/logo.png" alt="51Degrees" title="Data rewards the curious" width="160">
+
+**The free data files and test evidence for the 51Degrees SDKs**
+
+The examples and tests in the 51Degrees SDKs use these files for
 [Device Detection](https://51degrees.com/device-detection?utm_source=github&utm_medium=readme&utm_campaign=data&utm_content=readme&utm_term=introduction)
-and [IP Intelligence](https://51degrees.com/ip-intelligence?utm_source=github&utm_medium=readme&utm_campaign=data&utm_content=readme&utm_term=introduction),
-used by the examples and tests in every 51Degrees SDK.
+and [IP Intelligence](https://51degrees.com/ip-intelligence?utm_source=github&utm_medium=readme&utm_campaign=data&utm_content=readme&utm_term=introduction).
+As a submodule named `data`, the two folders are `data/device-detection` and
+`data/ip-intelligence`.
 
 ## Get the data files
 
@@ -23,10 +28,10 @@ place.
 
 To download only some files, name them or their folders, for example
 `./get-data-files.sh 51Degrees-LiteV4.1.hash` or
-`./get-data-files.ps1 ip-intelligence-data`. A file that is already there
-is kept. Add `-Update` (PowerShell) or `-u` (shell) to replace the files
-that have a newer version, or `-Force` or `-f` to download them all
-again. The shell script needs `curl` and `gzip`.
+`./get-data-files.ps1 ip-intelligence`. A file that is already there is
+kept. Add `-Update` (PowerShell) or `-u` (shell) to replace the files that
+have a newer version, or `-Force` or `-f` to download them all again. The
+shell script needs `curl` and `gzip`.
 
 To get the files straight after cloning, run the script in the same
 command.
@@ -51,7 +56,7 @@ It is `ci-<repository>` in GitHub Actions and `data` elsewhere, unless
 
 ## What is here
 
-### device-detection-data
+### device-detection
 
 | File | What it is |
 | --- | --- |
@@ -67,7 +72,7 @@ SetHeaderPlatformAccept-CH, JavascriptGetHighEntropyValues and
 JavascriptHardwareProfile. It is built from a subset of all devices and
 is updated less often than the paid data files.
 
-### ip-intelligence-data
+### ip-intelligence
 
 | File | What it is |
 | --- | --- |
