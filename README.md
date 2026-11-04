@@ -1,8 +1,6 @@
 # 51Degrees Device Detection and IP Intelligence data files
 
-<img src=".github/images/logo.png" alt="51Degrees" title="Data rewards the curious" width="160">
-
-**The free data files and test evidence for the 51Degrees SDKs**
+<p><img src=".github/images/logo.png" alt="51Degrees" title="Data rewards the curious" width="160" align="middle">&nbsp;<strong>The free data files and test evidence for the 51Degrees SDKs</strong></p>
 
 The examples and tests in the 51Degrees SDKs use these files for
 [Device Detection](https://51degrees.com/device-detection?utm_source=github&utm_medium=readme&utm_campaign=data&utm_content=readme&utm_term=introduction)
