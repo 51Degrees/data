@@ -1,0 +1,39 @@
+name: Unit tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          path: ip-intelligence-data
+
+      - name: Run unit tests
+        shell: pwsh
+        run: ./ip-intelligence-data/ci/run-unit-tests.ps1
+
+      - name: Publish Test Results
+        if: always()
+        uses: 51degrees/common-ci/.github/actions/publish_test_results@main
+        with:
+          repo-name: ip-intelligence-data
+          name: Linux
+          skip-integration: true
+          skip-performance: true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: ip-intelligence-data/test-results/unit/*.xml
+          if-no-files-found: warn
+
