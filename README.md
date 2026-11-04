@@ -63,7 +63,10 @@ It is `ci-<repository>` in GitHub Actions and `data` elsewhere, unless
 | `51Degrees-LiteV4.1.hash` | The Lite on-premise Device Detection data file. Downloaded by the scripts. |
 | `20000 User Agents.csv` | 20,000 of the most commonly seen User-Agents, one per line. Downloaded by the scripts. |
 | `20000 Evidence Records.yml` | 20,000 of the most commonly seen sets of HTTP headers, including [User-Agent Client Hints](https://learnclienthints.com/), one YAML record per set. Downloaded by the scripts. |
-| `metrics/` | Charts of the data's coverage of browsers, hardware, operating systems and crawlers. |
+
+Charts of the data's coverage of browsers, hardware, operating systems and
+crawlers are on the
+[device data quality page](https://51degrees.com/device-data-quality?utm_source=github&utm_medium=readme&utm_campaign=data&utm_content=readme&utm_term=device-data-quality).
 
 The Lite file gives IsMobile, ScreenPixelsHeight, ScreenPixelsWidth,
 PlatformName, PlatformVersion, PlatformVendor, BrowserName, BrowserVersion,
