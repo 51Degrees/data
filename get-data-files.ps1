@@ -56,14 +56,79 @@ function Test-Gzip([string]$Path) {
     finally { $file.Dispose() }
 }
 
-function Expand-Gzip([string]$Path, [string]$Destination) {
+# Unpacks the gzip data at Start into Out, and returns the length unpacked
+# as a gzip member records it, modulo 2^32.
+function Copy-Gzip([string]$Path, [long]$Start, $Out) {
+    $before = $Out.Position
     $in = [System.IO.File]::OpenRead($Path)
     try {
+        $in.Position = $Start
         $gzip = New-Object System.IO.Compression.GZipStream($in,
             [System.IO.Compression.CompressionMode]::Decompress)
-        $out = [System.IO.File]::Create($Destination)
-        try { $gzip.CopyTo($out) } finally { $out.Dispose(); $gzip.Dispose() }
+        try { $gzip.CopyTo($Out) } finally { $gzip.Dispose() }
     } finally { $in.Dispose() }
+    [uint32](($Out.Position - $before) % 4294967296)
+}
+
+# The length the last gzip member records, in the last 4 bytes of the file.
+function Get-LastMemberSize([string]$Path) {
+    $in = [System.IO.File]::OpenRead($Path)
+    try {
+        $tail = New-Object byte[] 4
+        $in.Position = $in.Length - 4
+        [void]$in.Read($tail, 0, 4)
+        [BitConverter]::ToUInt32($tail, 0)
+    } finally { $in.Dispose() }
+}
+
+# Where the gzip member after one that unpacked to Size bytes starts, found
+# as that length followed by the 1f 8b 08 that begins the next member, or
+# -1 when there is none.
+function Find-NextMember([string]$Path, [long]$From, [uint32]$Size) {
+    [byte[]]$pattern = [BitConverter]::GetBytes($Size) + [byte[]](0x1f, 0x8b, 0x08)
+    $in = [System.IO.File]::OpenRead($Path)
+    try {
+        $buffer = New-Object byte[] (1MB)
+        $position = $From
+        while ($position -lt $in.Length) {
+            $in.Position = $position
+            $count = $in.Read($buffer, 0, $buffer.Length)
+            if ($count -lt $pattern.Length) { break }
+            $i = [Array]::IndexOf($buffer, $pattern[0], 0, $count)
+            while ($i -ge 0 -and $i -le $count - $pattern.Length) {
+                $match = $true
+                for ($j = 1; $j -lt $pattern.Length; $j++) {
+                    if ($buffer[$i + $j] -ne $pattern[$j]) { $match = $false; break }
+                }
+                if ($match) { return $position + $i + 4 }
+                $i = [Array]::IndexOf($buffer, $pattern[0], $i + 1, $count - $i - 1)
+            }
+            $position += $count - ($pattern.Length - 1)
+        }
+    } finally { $in.Dispose() }
+    -1
+}
+
+# The Distributor sends each file as more than one gzip member. PowerShell 7
+# unpacks them all in one pass, but Windows PowerShell stops at the end of
+# the first, so there each member is unpacked in turn.
+function Expand-Gzip([string]$Path, [string]$Destination) {
+    $out = [System.IO.File]::Create($Destination)
+    try {
+        if ($PSVersionTable.PSEdition -eq 'Core') {
+            $null = Copy-Gzip $Path 0 $out
+            return
+        }
+        $lastSize = Get-LastMemberSize $Path
+        $start = 0L
+        while ($true) {
+            $size = Copy-Gzip $Path $start $out
+            if ($size -eq $lastSize) { return }
+            # A member is at least 20 bytes, its length in the last 4.
+            $start = Find-NextMember $Path ($start + 16) $size
+            if ($start -lt 0) { throw 'The file received did not unpack.' }
+        }
+    } finally { $out.Dispose() }
 }
 
 # Content-MD5 in hex or base64, as upper case hex, or null.
@@ -101,6 +166,9 @@ function Save-DataFile([string]$Url, [string]$Target, [string]$Label,
     [bool]$Conditional) {
     $request = New-Object System.Net.Http.HttpRequestMessage(
         [System.Net.Http.HttpMethod]::Get, $Url)
+    # Over HTTP/2 the Distributor answers If-Modified-Since with a 304 that
+    # has content, which a client may reject, so ask over HTTP/1.1.
+    $request.Version = New-Object Version 1, 1
     if ($Conditional) {
         $request.Headers.IfModifiedSince = [DateTimeOffset](
             Get-Item -LiteralPath $Target).LastWriteTimeUtc

@@ -119,7 +119,9 @@ fetch() {
         echo "Downloading $_label"
         set --
     fi
-    _code=$(curl -sS -L --connect-timeout "$CONNECT_TIMEOUT_SECONDS" \
+    # Over HTTP/2 the Distributor answers If-Modified-Since with a 304 that
+    # has content, which curl rejects, so ask over HTTP/1.1.
+    _code=$(curl -sS -L --http1.1 --connect-timeout "$CONNECT_TIMEOUT_SECONDS" \
         -A "$USER_AGENT" -R -D "$_headers" -o "$_part" -w '%{http_code}' \
         ${1+"$@"} "$_url") || _code=000
     case $_code in
