@@ -7,8 +7,11 @@ used by the examples and tests in every 51Degrees SDK.
 
 ## Get the data files
 
-The data files are not stored in this repository. Download the latest
-copies from 51Degrees with one of these scripts. No License Key is needed.
+The data files are not stored in this repository. Each one is listed as a
+`.link` file in the folder where the examples and tests look for it, and
+the link file holds the address the data file is downloaded from. No
+License Key is needed. These scripts download every linked file into
+place.
 
 ```pwsh
 ./get-data-files.ps1
@@ -18,8 +21,33 @@ copies from 51Degrees with one of these scripts. No License Key is needed.
 ./get-data-files.sh
 ```
 
-Each script saves the files in the folders the examples and tests look in,
-and only downloads a file again when a newer one is available.
+To download only some files, name them or their folders, for example
+`./get-data-files.sh 51Degrees-LiteV4.1.hash` or
+`./get-data-files.ps1 ip-intelligence-data`. A file that is already there
+is kept. Add `-Update` (PowerShell) or `-u` (shell) to replace the files
+that have a newer version, or `-Force` or `-f` to download them all
+again. The shell script needs `curl` and `gzip`.
+
+To get the files straight after cloning, run the script in the same
+command.
+
+```sh
+git clone https://github.com/51Degrees/data.git && data/get-data-files.sh
+```
+
+Where this repository is a submodule called `data`, the same works once
+the submodule is checked out.
+
+```sh
+git submodule update --init data && data/get-data-files.sh
+```
+
+The Distributor allows each file to be downloaded a limited number of
+times an hour from one address, and a script that reaches the limit says
+when to try again. The scripts send a `source` value with each download
+from the Distributor, so that 51Degrees can count which files are used.
+It is `ci-<repository>` in GitHub Actions and `data` elsewhere, unless
+`-Source` or `-s` gives another.
 
 ## What is here
 
@@ -71,5 +99,6 @@ for the options.
   - https://github.com/51Degrees/51degrees-nginx
   - https://github.com/51Degrees/51degrees-node
   - https://github.com/51Degrees/51degrees-php
+  - https://github.com/51Degrees/51degrees-python
   - https://github.com/51Degrees/51degrees-rust
   - https://github.com/51Degrees/51degrees-varnish

@@ -1,0 +1,85 @@
+name: Download scripts
+
+# Runs both download scripts on each operating system and checks the files
+# they save. The IP Intelligence Lite file, the largest, is only downloaded
+# on Ubuntu.
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  scripts:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: PowerShell downloads the files
+        shell: pwsh
+        run: ./get-data-files.ps1 device-detection-data 51Degrees-IPIV4AsnIpiV41.ipi
+
+      - name: PowerShell downloads the IP Intelligence Lite file
+        if: runner.os == 'Linux'
+        shell: pwsh
+        run: ./get-data-files.ps1 51Degrees-LiteV41.ipi
+
+      - name: PowerShell keeps files that are already there
+        shell: pwsh
+        run: |
+          $out = ./get-data-files.ps1 device-detection-data 6>&1 | Out-String
+          if ($out -notmatch 'already there') { throw $out }
+
+      - name: PowerShell finds nothing newer on the Distributor
+        shell: pwsh
+        run: |
+          $out = ./get-data-files.ps1 51Degrees-LiteV4.1.hash -Update 6>&1 |
+            Out-String
+          if ($out -notmatch 'up to date') { throw $out }
+
+      - name: Windows PowerShell downloads a file again
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./get-data-files.ps1 51Degrees-IPIV4AsnIpiV41.ipi -Force
+
+      - name: Shell downloads files again and checks for newer ones
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          ./get-data-files.sh -f 51Degrees-IPIV4AsnIpiV41.ipi "20000 Evidence Records.yml"
+          sh ./get-data-files.sh -u 51Degrees-IPIV4AsnIpiV41.ipi | grep 'up to date'
+          sh ./get-data-files.sh device-detection-data | grep 'already there'
+
+      - name: Check the files
+        shell: pwsh
+        run: |
+          $minimum = @{
+            'device-detection-data/51Degrees-LiteV4.1.hash' = 10MB
+            'device-detection-data/20000 Evidence Records.yml' = 1MB
+            'device-detection-data/20000 User Agents.csv' = 1MB
+            'ip-intelligence-data/51Degrees-IPIV4AsnIpiV41.ipi' = 1MB
+          }
+          if ($IsLinux) {
+            $minimum['ip-intelligence-data/51Degrees-LiteV41.ipi'] = 100MB
+          }
+          foreach ($path in $minimum.Keys) {
+            $file = Get-Item -LiteralPath $path
+            if ($file.Length -lt $minimum[$path]) {
+              throw "$path is only $($file.Length) bytes"
+            }
+            $stream = [System.IO.File]::OpenRead($file.FullName)
+            try {
+              if ($stream.ReadByte() -eq 0x1f -and $stream.ReadByte() -eq 0x8b) {
+                throw "$path is still gzip-compressed"
+              }
+            } finally { $stream.Dispose() }
+            Write-Host ('{0}: {1:N1} MB, last modified {2:u}' -f $path,
+              ($file.Length / 1MB), $file.LastWriteTimeUtc)
+          }
+          # Every download is ignored by git, and nothing is left behind.
+          $left = git status --porcelain --untracked-files=all
+          if ($left) { throw "Not ignored by git: $left" }
