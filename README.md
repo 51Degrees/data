@@ -93,17 +93,17 @@ for the options.
 
 ## Find out more
 
-- Device Detection: https://51degrees.com/device-detection?utm_source=github&utm_medium=readme&utm_campaign=data&utm_content=readme&utm_term=find-out-more
-- IP Intelligence: https://51degrees.com/ip-intelligence?utm_source=github&utm_medium=readme&utm_campaign=data&utm_content=readme&utm_term=find-out-more
-- Documentation: https://51degrees.com/documentation/index.html?utm_source=github&utm_medium=readme&utm_campaign=data&utm_content=readme&utm_term=find-out-more
-- The SDKs that use these files:
-  - https://github.com/51Degrees/51degrees-cxx
-  - https://github.com/51Degrees/51degrees-dotnet
-  - https://github.com/51Degrees/51degrees-go
-  - https://github.com/51Degrees/51degrees-java
-  - https://github.com/51Degrees/51degrees-nginx
-  - https://github.com/51Degrees/51degrees-node
-  - https://github.com/51Degrees/51degrees-php
-  - https://github.com/51Degrees/51degrees-python
-  - https://github.com/51Degrees/51degrees-rust
-  - https://github.com/51Degrees/51degrees-varnish
+- [Device Detection](https://51degrees.com/device-detection?utm_source=github&utm_medium=readme&utm_campaign=data&utm_content=readme&utm_term=find-out-more)
+- [IP Intelligence](https://51degrees.com/ip-intelligence?utm_source=github&utm_medium=readme&utm_campaign=data&utm_content=readme&utm_term=find-out-more)
+- [Documentation](https://51degrees.com/documentation/index.html?utm_source=github&utm_medium=readme&utm_campaign=data&utm_content=readme&utm_term=find-out-more)
+- The SDKs that use these files, for
+  [C and C++](https://github.com/51Degrees/51degrees-cxx),
+  [.NET](https://github.com/51Degrees/51degrees-dotnet),
+  [Go](https://github.com/51Degrees/51degrees-go),
+  [Java](https://github.com/51Degrees/51degrees-java),
+  [Nginx](https://github.com/51Degrees/51degrees-nginx),
+  [Node.js](https://github.com/51Degrees/51degrees-node),
+  [PHP](https://github.com/51Degrees/51degrees-php),
+  [Python](https://github.com/51Degrees/51degrees-python),
+  [Rust](https://github.com/51Degrees/51degrees-rust) and
+  [Varnish](https://github.com/51Degrees/51degrees-varnish)
