@@ -72,6 +72,72 @@ jobs:
           sh ./get-data-files.sh -u 51Degrees-IPIV4AsnIpiV41.ipi | grep 'up to date'
           sh ./get-data-files.sh device-detection | grep 'already there'
 
+      - name: Both scripts stop a stalled download and try it again
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          # A local server that sends the headers and 1 KB of a 10 MB file,
+          # then nothing, and records each request's User-Agent.
+          cat > "$RUNNER_TEMP/stall.py" <<'EOF'
+          import http.server
+          import sys
+          import time
+
+          class Stall(http.server.BaseHTTPRequestHandler):
+              def do_GET(self):
+                  with open(sys.argv[1], 'a') as log:
+                      log.write(self.headers.get('User-Agent', '') + '\n')
+                  self.send_response(200)
+                  self.send_header('Content-Length', str(10 * 1024 * 1024))
+                  self.end_headers()
+                  self.wfile.write(b'x' * 1024)
+                  self.wfile.flush()
+                  time.sleep(900)
+
+              def log_message(self, *args):
+                  pass
+
+          http.server.ThreadingHTTPServer(
+              ('127.0.0.1', 8765), Stall).serve_forever()
+          EOF
+          requests="$RUNNER_TEMP/requests.txt"
+          python3 "$RUNNER_TEMP/stall.py" "$requests" &
+          server=$!
+          mkdir stall-test
+          echo 'http://127.0.0.1:8765/stalled.bin' > stall-test/stalled.bin.link
+          sleep 2
+          start=$(date +%s)
+          sh ./get-data-files.sh stalled.bin > "$RUNNER_TEMP/sh.txt" 2>&1 &
+          sh_pid=$!
+          pwsh -NoProfile -File ./get-data-files.ps1 stalled.bin \
+            > "$RUNNER_TEMP/ps.txt" 2>&1 &
+          ps_pid=$!
+          sh_code=0; wait $sh_pid || sh_code=$?
+          ps_code=0; wait $ps_pid || ps_code=$?
+          seconds=$(( $(date +%s) - start ))
+          kill $server
+          cat "$RUNNER_TEMP/sh.txt" "$RUNNER_TEMP/ps.txt"
+          echo "Both scripts finished in $seconds seconds"
+          fail() { echo "::error::$1"; exit 1; }
+          [ "$sh_code" -ne 0 ] || fail 'The shell script did not fail'
+          [ "$ps_code" -ne 0 ] || fail 'The PowerShell script did not fail'
+          for out in sh ps; do
+            grep -q 'tried again (3 of 3)' "$RUNNER_TEMP/$out.txt" ||
+              fail "The $out script did not try three times"
+            grep -q 'was not saved' "$RUNNER_TEMP/$out.txt" ||
+              fail "The $out script did not say the file was not saved"
+          done
+          grep -q 'Nothing arrived for 120 seconds' "$RUNNER_TEMP/ps.txt" ||
+            fail 'The PowerShell script did not say why it stopped'
+          [ "$(grep -c '(sh;' "$requests")" -eq 3 ] ||
+            fail 'The shell script did not ask three times'
+          [ "$(grep -c '(PowerShell;' "$requests")" -eq 3 ] ||
+            fail 'The PowerShell script did not ask three times'
+          [ "$seconds" -lt 600 ] || fail "The scripts took $seconds seconds"
+          [ "$(ls stall-test)" = 'stalled.bin.link' ] ||
+            fail "Files were left behind: $(ls stall-test)"
+          rm -rf stall-test
+
       - name: Check the files
         shell: pwsh
         run: |

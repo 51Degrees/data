@@ -24,6 +24,12 @@ set -eu
 
 DISTRIBUTOR_HOST=distributor.51degrees.com
 CONNECT_TIMEOUT_SECONDS=30
+# A download that receives less than STALL_BYTES_PER_SECOND for STALL_SECONDS
+# is stopped, and a download that does not complete is tried again, up to
+# DOWNLOAD_ATTEMPTS times in all.
+STALL_BYTES_PER_SECOND=102400
+STALL_SECONDS=120
+DOWNLOAD_ATTEMPTS=3
 USER_AGENT='get-data-files/1.0 (sh; +https://github.com/51Degrees/data)'
 
 usage() {
@@ -121,9 +127,21 @@ fetch() {
     fi
     # Over HTTP/2 the Distributor answers If-Modified-Since with a 304 that
     # has content, which curl rejects, so ask over HTTP/1.1.
-    _code=$(curl -sS -L --http1.1 --connect-timeout "$CONNECT_TIMEOUT_SECONDS" \
-        -A "$USER_AGENT" -R -D "$_headers" -o "$_part" -w '%{http_code}' \
-        ${1+"$@"} "$_url") || _code=000
+    _attempt=1
+    while :; do
+        _code=$(curl -sS -L --http1.1 \
+            --connect-timeout "$CONNECT_TIMEOUT_SECONDS" \
+            --speed-limit "$STALL_BYTES_PER_SECOND" \
+            --speed-time "$STALL_SECONDS" \
+            -A "$USER_AGENT" -R -D "$_headers" -o "$_part" -w '%{http_code}' \
+            ${1+"$@"} "$_url") || _code=000
+        if [ "$_code" != 000 ] || [ "$_attempt" -ge "$DOWNLOAD_ATTEMPTS" ]; then
+            break
+        fi
+        _attempt=$((_attempt + 1))
+        echo "$_label did not arrive, so it is being tried again" \
+            "($_attempt of $DOWNLOAD_ATTEMPTS)"
+    done
     case $_code in
         200) ;;
         304)
