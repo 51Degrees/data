@@ -49,9 +49,9 @@ The Distributor allows each file to be downloaded a limited number of
 times an hour from one address, and a script that reaches the limit says
 when to try again. A download that receives less than 100 KB a second for
 two minutes is stopped, and a download that does not complete is tried
-again, up to three times in all. The scripts send a `source` value with each download
-from the Distributor, so that 51Degrees can count which files are used.
-It is `ci-<repository>` in GitHub Actions and `data` elsewhere, unless
+again, up to three times in all. The scripts send a `source` value with each
+download from the Distributor, so that 51Degrees can count which files are
+used. It is `ci-<repository>` in GitHub Actions and `data` elsewhere, unless
 `-Source` or `-s` gives another.
 
 ## What is here
