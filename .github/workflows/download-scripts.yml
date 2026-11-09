@@ -72,62 +72,62 @@ jobs:
           sh ./get-data-files.sh -u 51Degrees-IPIV4AsnIpiV41.ipi | grep 'up to date'
           sh ./get-data-files.sh device-detection | grep 'already there'
 
-      - name: Both scripts stop a stalled download and try it again
+      - name: Both scripts try a stalled, slow or dropped download again
         if: runner.os == 'Linux'
-        # Three attempts that each stall for two minutes take six minutes. A
-        # script that waits longer on a stall fails the step.
+        # Three tries that each stop after two minutes take six minutes.
         timeout-minutes: 10
         shell: bash
         run: |
           mkdir stall-test && cd stall-test
-          # A local server that sends the headers and 1 KB of a 10 MB file,
-          # then nothing, and logs each request's User-Agent.
+          # A local server for a 10 MB file, logging each path asked for. A
+          # stalled path gets 1 KB then nothing, a trickle path 1 KB every 2
+          # seconds, and a dropped path 1 KB then a closed connection.
           cat > server.py <<'EOF'
           import http.server
           import time
 
-          class Stall(http.server.BaseHTTPRequestHandler):
+          class Server(http.server.BaseHTTPRequestHandler):
               def do_GET(self):
                   with open('requests.txt', 'a') as log:
-                      print(self.headers['User-Agent'], file=log)
+                      print(self.path, file=log)
                   self.send_response(200)
                   self.send_header('Content-Length', str(10 * 1024 * 1024))
                   self.end_headers()
-                  self.wfile.write(b'x' * 1024)
-                  self.wfile.flush()
-                  time.sleep(900)
+                  for _ in range(300 if 'trickle' in self.path else 1):
+                      self.wfile.write(b'x' * 1024)
+                      time.sleep(2)
+                  if 'stalled' in self.path:
+                      time.sleep(900)
 
           http.server.ThreadingHTTPServer(
-              ('127.0.0.1', 8765), Stall).serve_forever()
+              ('127.0.0.1', 8765), Server).serve_forever()
           EOF
-          python3 server.py &
-          server=$!
-          echo 'http://127.0.0.1:8765/stalled.bin' > stalled.bin.link
+          # Its errors come from writing to connections a script has closed.
+          python3 server.py 2> /dev/null &
+          server=$! && disown
           sleep 2
-          sh ../get-data-files.sh stalled.bin > sh.txt 2>&1 &
-          sh_pid=$!
-          pwsh -NoProfile -File ../get-data-files.ps1 stalled.bin \
-            > PowerShell.txt 2>&1 &
-          ps_pid=$!
-          sh_code=0; wait $sh_pid || sh_code=$?
-          ps_code=0; wait $ps_pid || ps_code=$?
-          kill $server
-          cat sh.txt PowerShell.txt
-          fail() { echo "::error::$1"; exit 1; }
-          [ $sh_code -ne 0 ] || fail 'The shell script did not fail'
-          [ $ps_code -ne 0 ] || fail 'The PowerShell script did not fail'
-          for script in sh PowerShell; do
-            grep -q 'tried again (3 of 3)' $script.txt ||
-              fail "The $script script did not try three times"
-            grep -q 'was not saved' $script.txt ||
-              fail "The $script script did not say the file was not saved"
-            [ "$(grep -c "($script;" requests.txt)" -eq 3 ] ||
-              fail "The $script script did not ask three times"
+          # Each script downloads from every path at once, under its own name.
+          for name in {sh,PowerShell}-{stalled,trickle,dropped}; do
+            echo "http://127.0.0.1:8765/$name" > $name.link
+            run='pwsh -NoProfile -File ../get-data-files.ps1'
+            [[ $name = PowerShell-* ]] || run='sh ../get-data-files.sh'
+            ($run $name || echo "Exit code $?") > $name.txt 2>&1 &
           done
-          grep -q 'Nothing arrived for 120 seconds' PowerShell.txt ||
-            fail 'The PowerShell script did not say why it stopped'
-          [ "$(ls stalled.bin*)" = stalled.bin.link ] ||
-            fail "Files were left behind: $(ls stalled.bin*)"
+          wait
+          kill $server
+          tail -n +1 *-*.txt
+          fail() { echo "::error::$1"; exit 1; }
+          for out in *-*.txt; do
+            grep -q 'Exit code [1-9]' $out && grep -q 'was not saved' $out &&
+              grep -q 'tried again (3 of 3)' $out &&
+              [ "$(grep -cx "/${out%.txt}" requests.txt)" -eq 3 ] ||
+              fail "$out: the script did not fail after asking three times"
+          done
+          grep -q 'Nothing arrived for 120 seconds' PowerShell-stalled.txt &&
+            grep -q 'Less than 100 KB a second arrived for 120 seconds' \
+              PowerShell-trickle.txt || fail 'PowerShell gave the wrong reason'
+          [ -z "$(ls | grep -Ev '\.(link|py|txt)$')" ] ||
+            fail "Files were left behind: $(ls)"
           cd .. && rm -r stall-test
 
       - name: Check the files

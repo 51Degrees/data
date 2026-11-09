@@ -170,8 +170,10 @@ function Assert-Md5($Response, [string[]]$Paths) {
 
 # Copies the response body to File. Throws a TimeoutException when no read
 # completes in StallSeconds, or less than StallBytesPerSecond arrives over
-# StallSeconds. Each read is waited on rather than cancelled, because in
-# Windows PowerShell the response stream ignores a cancellation token.
+# StallSeconds, and an HttpRequestException when a read fails because the
+# connection closed or broke, so that each is tried again. Each read is
+# waited on rather than cancelled, because in Windows PowerShell the response
+# stream ignores a cancellation token.
 function Copy-Body($Stream, $File) {
     $buffer = New-Object byte[] 81920
     $limit = [TimeSpan]::FromSeconds($StallSeconds)
@@ -183,7 +185,11 @@ function Copy-Body($Stream, $File) {
             throw [TimeoutException]::new(
                 "Nothing arrived for $StallSeconds seconds.")
         }
-        $count = $read.GetAwaiter().GetResult()
+        if ($read.IsFaulted) {
+            $broken = $read.Exception.InnerException
+            throw [Net.Http.HttpRequestException]::new($broken.Message, $broken)
+        }
+        $count = $read.Result
         if ($count -eq 0) { return }
         $File.Write($buffer, 0, $count)
         $received += $count
