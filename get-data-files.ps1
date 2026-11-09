@@ -44,6 +44,12 @@ $ErrorActionPreference = 'Stop'
 
 $DistributorHost = 'distributor.51degrees.com'
 $HeadersTimeoutMinutes = 5
+# A download that receives less than StallBytesPerSecond for StallSeconds is
+# stopped, and a download that does not complete is tried again, up to
+# DownloadAttempts times in all.
+$StallBytesPerSecond = 100KB
+$StallSeconds = 120
+$DownloadAttempts = 3
 $UserAgent = 'get-data-files/1.0 (PowerShell; +https://github.com/51Degrees/data)'
 
 function Get-DataFileName($Link) {
@@ -162,6 +168,53 @@ function Assert-Md5($Response, [string[]]$Paths) {
     throw 'The file received does not match its Content-MD5 header.'
 }
 
+# Copies the response body to File, and throws a TimeoutException when less
+# than StallBytesPerSecond arrives for StallSeconds.
+function Copy-Body($Stream, $File) {
+    $buffer = New-Object byte[] 81920
+    $limit = [TimeSpan]::FromSeconds($StallSeconds)
+    $window = [Diagnostics.Stopwatch]::StartNew()
+    $received = 0
+    while ($true) {
+        $read = $Stream.ReadAsync($buffer, 0, $buffer.Length)
+        $first = [System.Threading.Tasks.Task]::WhenAny(
+            [System.Threading.Tasks.Task[]]@($read,
+                [System.Threading.Tasks.Task]::Delay($limit))
+        ).GetAwaiter().GetResult()
+        if (-not [object]::ReferenceEquals($first, $read)) {
+            throw [TimeoutException]::new(
+                "Nothing arrived for $StallSeconds seconds.")
+        }
+        $count = $read.GetAwaiter().GetResult()
+        if ($count -eq 0) { return }
+        $File.Write($buffer, 0, $count)
+        $received += $count
+        if ($window.Elapsed -ge $limit) {
+            if ($received -lt $StallBytesPerSecond * $StallSeconds) {
+                throw [TimeoutException]::new(('Less than {0} KB a second ' +
+                    'arrived for {1} seconds.') -f ($StallBytesPerSecond / 1KB),
+                    $StallSeconds)
+            }
+            $received = 0
+            $window.Restart()
+        }
+    }
+}
+
+# True when trying again may get the file, because the connection stalled or
+# broke rather than the server answering.
+function Test-Transient([Exception]$Exception) {
+    for ($e = $Exception; $e; $e = $e.InnerException) {
+        if ($e -is [TimeoutException] -or
+            $e -is [System.Net.Http.HttpRequestException] -or
+            $e -is [System.Threading.Tasks.TaskCanceledException] -or
+            $e -is [System.Net.Sockets.SocketException]) {
+            return $true
+        }
+    }
+    return $false
+}
+
 function Save-DataFile([string]$Url, [string]$Target, [string]$Label,
     [bool]$Conditional) {
     $request = New-Object System.Net.Http.HttpRequestMessage(
@@ -203,7 +256,7 @@ function Save-DataFile([string]$Url, [string]$Target, [string]$Label,
         }
         $stream = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
         $file = [System.IO.File]::Create($part)
-        try { $stream.CopyTo($file) } finally { $file.Dispose(); $stream.Dispose() }
+        try { Copy-Body $stream $file } finally { $file.Dispose(); $stream.Dispose() }
         if ((Get-Item -LiteralPath $part).Length -eq 0) {
             throw 'The server sent an empty file.'
         }
@@ -281,11 +334,20 @@ try {
             if ($url.Contains('?')) { $separator = '&' }
             $url += $separator + 'source=' + [Uri]::EscapeDataString($Source)
         }
-        try {
-            Save-DataFile $url $path $label ($exists -and -not $Force)
-        } catch {
-            Write-Warning "$label was not saved. $($_.Exception.Message)"
-            $failed++
+        for ($attempt = 1; ; $attempt++) {
+            try {
+                Save-DataFile $url $path $label ($exists -and -not $Force)
+                break
+            } catch {
+                if ($attempt -ge $DownloadAttempts -or
+                    -not (Test-Transient $_.Exception)) {
+                    Write-Warning "$label was not saved. $($_.Exception.Message)"
+                    $failed++
+                    break
+                }
+                Write-Host ("$label did not arrive, so it is being tried " +
+                    "again ($($attempt + 1) of $DownloadAttempts)")
+            }
         }
     }
 } finally {
