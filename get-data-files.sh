@@ -196,7 +196,11 @@ fetch() {
         cleanup
         return 1
     fi
-    mv -f "$_saved" "$_target"
+    if ! mv -f "$_saved" "$_target"; then
+        echo "$_label was not saved, because it could not be written." >&2
+        cleanup
+        return 1
+    fi
     cleanup
     echo "Saved $_label, $(( $(wc -c < "$_target") / 1048576 )) MB"
 }
