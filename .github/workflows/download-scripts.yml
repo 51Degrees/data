@@ -102,7 +102,7 @@ jobs:
           http.server.ThreadingHTTPServer(
               ('127.0.0.1', 8765), Server).serve_forever()
           EOF
-          # Its errors come from writing to connections a script has closed.
+          # Hide the server's errors from writing to connections already closed.
           python3 server.py 2> /dev/null &
           server=$! && disown
           sleep 2
