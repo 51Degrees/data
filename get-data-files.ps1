@@ -168,39 +168,50 @@ function Assert-Md5($Response, [string[]]$Paths) {
     throw 'The file received does not match its Content-MD5 header.'
 }
 
-# Copies the response body to File. Throws a TimeoutException when no read
-# completes in StallSeconds, or less than StallBytesPerSecond arrives over
-# StallSeconds, and an HttpRequestException when a read fails because the
-# connection closed or broke, so that each is tried again. Each read is
-# waited on rather than cancelled, because in Windows PowerShell the response
-# stream ignores a cancellation token.
+# Copies the response body to File. Throws a TimeoutException when nothing
+# arrives for StallSeconds, or less than StallBytesPerSecond arrives in the
+# StallSeconds from a window's first byte, and an HttpRequestException when a
+# read fails because the connection closed or broke, so that each is tried
+# again. A read is waited on rather than cancelled, because in Windows
+# PowerShell the response stream ignores a cancellation token. Each wait ends
+# by the window's end, and a read still pending carries on into the next
+# window, so that a slow download is stopped when its window ends.
 function Copy-Body($Stream, $File) {
     $buffer = New-Object byte[] 81920
-    $limit = [TimeSpan]::FromSeconds($StallSeconds)
-    $window = [Diagnostics.Stopwatch]::StartNew()
+    $limitMs = $StallSeconds * 1000
+    $window = [Diagnostics.Stopwatch]::new()
+    $idle = [Diagnostics.Stopwatch]::StartNew()
     $received = 0
+    $read = $null
     while ($true) {
-        $read = $Stream.ReadAsync($buffer, 0, $buffer.Length)
-        if ([Threading.Tasks.Task]::WaitAny($read, $limit) -lt 0) {
+        if (-not $read) { $read = $Stream.ReadAsync($buffer, 0, $buffer.Length) }
+        $waitMs = [Math]::Max(0, $limitMs -
+            [Math]::Max($window.ElapsedMilliseconds, $idle.ElapsedMilliseconds))
+        if ([Threading.Tasks.Task]::WaitAny($read, [int]$waitMs) -ge 0) {
+            if ($read.IsFaulted) {
+                $broken = $read.Exception.InnerException
+                throw [Net.Http.HttpRequestException]::new($broken.Message,
+                    $broken)
+            }
+            $count = $read.Result
+            if ($count -eq 0) { return }
+            $File.Write($buffer, 0, $count)
+            $received += $count
+            $read = $null
+            $idle.Restart()
+            $window.Start()
+        } elseif ($idle.ElapsedMilliseconds -ge $limitMs) {
             throw [TimeoutException]::new(
                 "Nothing arrived for $StallSeconds seconds.")
         }
-        if ($read.IsFaulted) {
-            $broken = $read.Exception.InnerException
-            throw [Net.Http.HttpRequestException]::new($broken.Message, $broken)
-        }
-        $count = $read.Result
-        if ($count -eq 0) { return }
-        $File.Write($buffer, 0, $count)
-        $received += $count
-        if ($window.Elapsed -ge $limit) {
+        if ($window.ElapsedMilliseconds -ge $limitMs) {
             if ($received -lt $StallBytesPerSecond * $StallSeconds) {
                 throw [TimeoutException]::new('Less than ' +
                     "$($StallBytesPerSecond / 1KB) KB a second arrived for " +
                     "$StallSeconds seconds.")
             }
             $received = 0
-            $window.Restart()
+            $window.Reset()
         }
     }
 }
