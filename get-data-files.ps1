@@ -168,8 +168,10 @@ function Assert-Md5($Response, [string[]]$Paths) {
     throw 'The file received does not match its Content-MD5 header.'
 }
 
-# Copies the response body to File, and throws a TimeoutException when less
-# than StallBytesPerSecond arrives for StallSeconds.
+# Copies the response body to File. Throws a TimeoutException when no read
+# completes in StallSeconds, or less than StallBytesPerSecond arrives over
+# StallSeconds. Each read is waited on rather than cancelled, because in
+# Windows PowerShell the response stream ignores a cancellation token.
 function Copy-Body($Stream, $File) {
     $buffer = New-Object byte[] 81920
     $limit = [TimeSpan]::FromSeconds($StallSeconds)
@@ -177,11 +179,7 @@ function Copy-Body($Stream, $File) {
     $received = 0
     while ($true) {
         $read = $Stream.ReadAsync($buffer, 0, $buffer.Length)
-        $first = [System.Threading.Tasks.Task]::WhenAny(
-            [System.Threading.Tasks.Task[]]@($read,
-                [System.Threading.Tasks.Task]::Delay($limit))
-        ).GetAwaiter().GetResult()
-        if (-not [object]::ReferenceEquals($first, $read)) {
+        if ([Threading.Tasks.Task]::WaitAny($read, $limit) -lt 0) {
             throw [TimeoutException]::new(
                 "Nothing arrived for $StallSeconds seconds.")
         }
@@ -191,9 +189,9 @@ function Copy-Body($Stream, $File) {
         $received += $count
         if ($window.Elapsed -ge $limit) {
             if ($received -lt $StallBytesPerSecond * $StallSeconds) {
-                throw [TimeoutException]::new(('Less than {0} KB a second ' +
-                    'arrived for {1} seconds.') -f ($StallBytesPerSecond / 1KB),
-                    $StallSeconds)
+                throw [TimeoutException]::new('Less than ' +
+                    "$($StallBytesPerSecond / 1KB) KB a second arrived for " +
+                    "$StallSeconds seconds.")
             }
             $received = 0
             $window.Restart()
@@ -205,12 +203,9 @@ function Copy-Body($Stream, $File) {
 # broke rather than the server answering.
 function Test-Transient([Exception]$Exception) {
     for ($e = $Exception; $e; $e = $e.InnerException) {
-        if ($e -is [TimeoutException] -or
-            $e -is [System.Net.Http.HttpRequestException] -or
-            $e -is [System.Threading.Tasks.TaskCanceledException] -or
-            $e -is [System.Net.Sockets.SocketException]) {
-            return $true
-        }
+        if ($e -is [TimeoutException] -or $e -is [OperationCanceledException] -or
+            $e -is [Net.Http.HttpRequestException] -or
+            $e -is [Net.Sockets.SocketException]) { return $true }
     }
     return $false
 }
