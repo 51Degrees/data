@@ -72,7 +72,7 @@ jobs:
           sh ./get-data-files.sh -u 51Degrees-IPIV4AsnIpiV41.ipi | grep 'up to date'
           sh ./get-data-files.sh device-detection | grep 'already there'
 
-      - name: Both scripts try a stalled, slow or dropped download again
+      - name: Both scripts try again only when the connection fails
         if: runner.os == 'Linux'
         # Three tries that each stop after two minutes take six minutes.
         timeout-minutes: 10
@@ -81,7 +81,8 @@ jobs:
           mkdir stall-test && cd stall-test
           # A local server for a 10 MB file, logging each path asked for. A
           # stalled path gets 1 KB then nothing, a trickle path 1 KB every 2
-          # seconds, and a dropped path 1 KB then a closed connection.
+          # seconds, a path ending in 403 or 429 gets that answer, and any
+          # other path gets 1 KB then a closed connection.
           cat > server.py <<'EOF'
           import http.server
           import time
@@ -90,6 +91,12 @@ jobs:
               def do_GET(self):
                   with open('requests.txt', 'a') as log:
                       print(self.path, file=log)
+                  if self.path[-3:] in ('403', '429'):
+                      self.send_response(int(self.path[-3:]))
+                      self.send_header('Retry-After', '120')
+                      self.send_header('Content-Length', '0')
+                      self.end_headers()
+                      return
                   self.send_response(200)
                   self.send_header('Content-Length', str(10 * 1024 * 1024))
                   self.end_headers()
@@ -107,8 +114,17 @@ jobs:
           server=$! && disown
           sleep 2
           # Each script downloads from every path at once, under its own name.
-          for name in {sh,PowerShell}-{stalled,trickle,dropped}; do
-            echo "http://127.0.0.1:8765/$name" > $name.link
+          # Nothing listens on port 9, and a .part file that cannot be
+          # written stops the unwritable download.
+          for script in sh PowerShell; do
+            for path in stalled trickle dropped 403 429 unwritable; do
+              echo "http://127.0.0.1:8765/$script-$path" > $script-$path.link
+            done
+            echo 'http://127.0.0.1:9/' > $script-refused.link
+            touch $script-unwritable.part && chmod a-w $script-unwritable.part
+          done
+          for link in *.link; do
+            name=${link%.link}
             run='pwsh -NoProfile -File ../get-data-files.ps1'
             [[ $name = PowerShell-* ]] || run='sh ../get-data-files.sh'
             ($run $name || echo "Exit code $?") > $name.txt 2>&1 &
@@ -116,19 +132,31 @@ jobs:
           wait
           kill $server
           tail -n +1 *-*.txt
-          fail() { echo "::error::$1"; exit 1; }
+          failed=0
+          fail() { echo "::error::$1"; failed=1; }
+          asked() { [ "$(grep -cx "/$1" requests.txt)" -eq $2 ]; }
           for out in *-*.txt; do
-            grep -q 'Exit code [1-9]' $out && grep -q 'was not saved' $out &&
-              grep -q 'tried again (3 of 3)' $out &&
-              [ "$(grep -cx "/${out%.txt}" requests.txt)" -eq 3 ] ||
-              fail "$out: the script did not fail after asking three times"
+            name=${out%.txt}
+            grep -q 'Exit code [1-9]' $out && grep -q 'was not saved' $out ||
+              fail "$out: the script did not fail"
+            case $name in
+              *-403|*-429|*-unwritable)
+                ! grep -q 'tried again' $out && asked $name 1 ||
+                  fail "$out: the script did not ask exactly once" ;;
+              *-refused)
+                grep -q 'tried again (3 of 3)' $out ||
+                  fail "$out: the script did not try three times" ;;
+              *)
+                grep -q 'tried again (3 of 3)' $out && asked $name 3 ||
+                  fail "$out: the script did not ask three times" ;;
+            esac
           done
           grep -q 'Nothing arrived for 120 seconds' PowerShell-stalled.txt &&
             grep -q 'Less than 100 KB a second arrived for 120 seconds' \
               PowerShell-trickle.txt || fail 'PowerShell gave the wrong reason'
-          [ -z "$(ls | grep -Ev '\.(link|py|txt)$')" ] ||
-            fail "Files were left behind: $(ls)"
-          cd .. && rm -r stall-test
+          left=$(ls -I '*.link' -I '*.py' -I '*.txt' | xargs)
+          [ -z "$left" ] || fail "Files were left behind: $left"
+          [ $failed = 0 ] && cd .. && rm -r stall-test
 
       - name: Check the files
         shell: pwsh
