@@ -154,6 +154,10 @@ jobs:
           grep -q 'Nothing arrived for 120 seconds' PowerShell-stalled.txt &&
             grep -q 'Less than 100 KB a second arrived for 120 seconds' \
               PowerShell-trickle.txt || fail 'PowerShell gave the wrong reason'
+          for out in *-429.txt; do
+            grep -q 'Try again in 2 minutes' $out ||
+              fail "$out: the script did not say when to try again"
+          done
           left=$(ls -I '*.link' -I '*.py' -I '*.txt' | xargs)
           [ -z "$left" ] || fail "Files were left behind: $left"
           [ $failed = 0 ] && cd .. && rm -r stall-test
