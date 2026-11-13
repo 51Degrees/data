@@ -104,13 +104,15 @@ say.
   Wait, or keep the files already downloaded. A file that is already there is
   not downloaded again unless `-u` or `-f` is given, and with `-u` only when a
   newer one exists.
-- **The old scripts in `ip-intelligence`.** On `rc` and `main`,
-  `get-lite-file-from-azure.ps1` and `get-lite-file-from-azure.sh` still
-  download the Lite and Asn files from Azure blob storage into the folder they
-  run in, although `ip-intelligence/README.md` says they download the same
-  files as the root scripts. Use the root scripts. The draft pull request
-  [#2](https://github.com/51Degrees/data/pull/2) turns them into wrappers
-  around the root scripts.
+- **A download that stops arriving.** A download that gets less than 100 KB a
+  second for 120 seconds is stopped and tried again, up to three times in all,
+  and the script then prints that the file `was not saved`. A connection that
+  fails is tried again the same way, but a file that cannot be written, or an
+  answer such as 403 or 429, is not.
+- **The old scripts in `ip-intelligence`.** `get-lite-file-from-azure.ps1` and
+  `get-lite-file-from-azure.sh` are kept for callers that already use them.
+  Each runs the root script for the Lite file, the Asn file or both, so use the
+  root scripts in anything new.
 - **An unknown name.** A name that is no file or folder here stops the script
   with `No data file or folder is called <name>` before anything is
   downloaded.
@@ -142,6 +144,10 @@ the evidence for each.
    `data` elsewhere, unless `-s` or `-Source` gives another. Never add a `utm_`
    parameter, which the UTM link lint forbids on `distributor.51degrees.com`.
 5. Expect 429 with `Retry-After`.
+6. Stop a download that stops arriving and try it again. A stalled download
+   held builds for 10 minutes and more on 7 November 2026. The scripts stop one
+   that gets less than 100 KB a second for 120 seconds, and ask up to three
+   times in all.
 
 ## Changing the scripts
 
@@ -151,6 +157,11 @@ on every pull request, on Ubuntu, Windows and macOS. It checks that PowerShell
 run keeps the files, that `-u` finds nothing newer, that each file is at least
 its minimum size and no longer gzip-compressed, and that `git status` is clean
 afterwards. Only the Ubuntu job downloads the IP Intelligence Lite file.
+It also checks that the two old scripts in `ip-intelligence` save the same Asn
+file as the root scripts. On Ubuntu it runs both root scripts against a local
+server that stalls, sends slowly, drops the connection, refuses it or answers
+403 or 429, and checks that each is tried again only when the connection
+fails.
 
 A new data file needs a `<file>.link` beside where the file goes, holding its
 URL on one line, and a line in `.gitignore`, because the workflow fails when a
