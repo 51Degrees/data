@@ -129,12 +129,14 @@ fetch() {
     # has content, which curl rejects, so ask over HTTP/1.1.
     _attempt=1
     while :; do
+        # A download that fails is tried again, unless curl's code 23 says the
+        # file could not be written here, which trying again would not fix.
         _code=$(curl -sS -L --http1.1 \
             --connect-timeout "$CONNECT_TIMEOUT_SECONDS" \
             --speed-limit "$STALL_BYTES_PER_SECOND" \
             --speed-time "$STALL_SECONDS" \
             -A "$USER_AGENT" -R -D "$_headers" -o "$_part" -w '%{http_code}' \
-            ${1+"$@"} "$_url") || _code=000
+            ${1+"$@"} "$_url") || { [ $? -eq 23 ] && _code=write || _code=000; }
         if [ "$_code" != 000 ] || [ "$_attempt" -ge "$DOWNLOAD_ATTEMPTS" ]; then
             break
         fi
@@ -157,6 +159,10 @@ fetch() {
             esac
             echo "$_label was not saved. Each file can only be downloaded" \
                 "a few times an hour from one address. Try again $_when." >&2
+            cleanup
+            return 1 ;;
+        write)
+            echo "$_label was not saved, because it could not be written." >&2
             cleanup
             return 1 ;;
         000)
@@ -190,7 +196,11 @@ fetch() {
         cleanup
         return 1
     fi
-    mv -f "$_saved" "$_target"
+    if ! mv -f "$_saved" "$_target"; then
+        echo "$_label was not saved, because it could not be written." >&2
+        cleanup
+        return 1
+    fi
     cleanup
     echo "Saved $_label, $(( $(wc -c < "$_target") / 1048576 )) MB"
 }
