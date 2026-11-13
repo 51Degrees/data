@@ -1,1 +1,0 @@
-## Metrics contains the assets for https://51degrees.com/device-data-quality?utm_source=github&utm_medium=readme&utm_campaign=data&utm_content=metrics-readme.txt&utm_term=top and is updated weekly.
