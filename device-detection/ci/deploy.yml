@@ -10,7 +10,7 @@ pr: none
 resources:
   pipelines:
   - pipeline: build-pipeline   # The name for the triggering build pipeline within this script
-    source: device-detection-data-tag-repository # Name of the pipeline from here: https://51degrees.visualstudio.com/Pipeline/_build
+    source: device-detection-data-tag-repository # Name of the build pipeline this deployment follows
     trigger: true 
   repositories:
   - repository: ciTemplates # Id of the repository used to reference to in this script
